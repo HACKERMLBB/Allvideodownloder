@@ -103,28 +103,45 @@ async def handle_quality(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await query.edit_message_text("⏳ *Downloading... Please wait!* 🕐", parse_mode="Markdown")
     os.makedirs('downloads', exist_ok=True)
 
+    # --- BASE OPTIONS - YOUTUBE FIX ---
+    base_opts = {
+        'outtmpl': 'downloads/%(title)s.%(ext)s',
+        'noplaylist': True,
+        'quiet': True,
+        'no_warnings': True,
+        'concurrent_fragments': 5,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'web'],
+            }
+        },
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36',
+        },
+    }
+
+    # Add cookies if file exists
+    if os.path.exists('cookies.txt'):
+        base_opts['cookiefile'] = 'cookies.txt'
+
     if choice == 'audio':
         ydl_opts = {
-            'outtmpl': 'downloads/%(title)s.%(ext)s',
+            **base_opts,
             'format': 'bestaudio/best',
-            'noplaylist': True,
-            'quiet': True,
             'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}],
         }
     elif choice == 'best':
         ydl_opts = {
-            'outtmpl': 'downloads/%(title)s.%(ext)s',
-            'format': 'best[ext=mp4][filesize<48M]/best[filesize<48M]/best',
-            'noplaylist': True,
-            'quiet': True,
+            **base_opts,
+            'format': 'best[height<=720][filesize<48M]/best[height<=720]/best[filesize<48M]/best',
         }
     else:
+        # 480 / 720 / 1080
+        height = int(choice)
         ydl_opts = {
-            'outtmpl': 'downloads/%(title)s.%(ext)s',
-            'format': f'bestvideo[height<={choice}][ext=mp4]+bestaudio[ext=m4a]/best[height<={choice}][filesize<48M]/best',
+            **base_opts,
+            'format': f'bestvideo[height<={height}][filesize<48M]+bestaudio/bestvideo[height<={height}]+bestaudio/best[height<={height}][filesize<48M]/best[height<={height}]/best',
             'merge_output_format': 'mp4',
-            'noplaylist': True,
-            'quiet': True,
         }
 
     try:
@@ -133,6 +150,13 @@ async def handle_quality(update: Update, context: ContextTypes.DEFAULT_TYPE):
             filename = ydl.prepare_filename(info)
             if choice == 'audio':
                 filename = os.path.splitext(filename)[0] + '.mp3'
+
+        if not os.path.exists(filename):
+            # Find file if extension changed
+            import glob
+            files = glob.glob('downloads/*')
+            if files:
+                filename = max(files, key=os.path.getctime)
 
         if os.path.getsize(filename) > 50 * 1024 * 1024:
             await msg.edit_text("😢 *File Too Big!* Telegram limit is 50MB.\nTry lower quality or /audio 🎧", parse_mode="Markdown")
@@ -151,7 +175,8 @@ async def handle_quality(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.delete()
 
     except Exception as e:
-        await msg.edit_text(f"⚠️ *Error:* `{str(e)[:400]}`\n\n🔒 Try another link or check if video is private.", parse_mode="Markdown")
+        error_msg = str(e)[:400]
+        await msg.edit_text(f"⚠️ *Error:* `{error_msg}`\n\n🔒 Try another link or check if video is private.", parse_mode="Markdown")
 
 def main():
     threading.Thread(target=run_web, daemon=True).start()
