@@ -1,4 +1,5 @@
 import os
+import asyncio
 import threading
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -144,7 +145,7 @@ async def handle_quality(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if choice == 'audio':
                 await query.message.reply_audio(audio=f, title=info.get('title', 'Audio'), caption=f"🎧 *{info.get('title', 'Audio')}* ✅", parse_mode="Markdown")
             else:
-                await query.message.reply_video(video=f, caption=f"✅ *{info.get('title', 'Video')}* 🎬\n\nDownloaded by @YourBot", parse_mode="Markdown")
+                await query.message.reply_video(video=f, caption=f"✅ *{info.get('title', 'Video')}* 🎬", parse_mode="Markdown")
 
         os.remove(filename)
         await msg.delete()
@@ -153,9 +154,7 @@ async def handle_quality(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.edit_text(f"⚠️ *Error:* `{str(e)[:400]}`\n\n🔒 Try another link or check if video is private.", parse_mode="Markdown")
 
 def main():
-    # Start Web Server in background thread for Render Port
     threading.Thread(target=run_web, daemon=True).start()
-
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_cmd))
@@ -166,4 +165,5 @@ def main():
     app.run_polling()
 
 if __name__ == "__main__":
+    asyncio.set_event_loop(asyncio.new_event_loop())
     main()
